@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Script to show how much time is remaining (max) for a given node
-# Version 1.1
+# Version 1.0
 
 # Handy commands...
 # squeue -O timeleft,nodelist -w c21a-s1
@@ -11,8 +11,28 @@ use Text::ParseWords;
 use DBI;
 use strict;
 use POSIX qw(strftime);
+use Getopt::Std;
 
 my $debug=0;
+
+# Get Commandline Options
+getopts('dh');
+our($opt_h, $opt_d);
+if($opt_h) {
+    print "Usage: $0 [options]\n";
+    print "Options: \n";
+    print "-d: Debug mode\n";
+    exit 0;
+}
+if($opt_d) {
+    $debug=1;
+}
+
+# Check for specific nodes instead
+my $specNodes;
+if($ARGV[0]) {
+    $specNodes = $ARGV[0];
+}
 
 # Setup temporary database
 my $driver = "SQLite";
@@ -120,8 +140,35 @@ if($debug) {
 }
 
 # Give a result
-$stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
-    ORDER BY NODE ASC, TIMEREMAIN DESC);
+# Are we looking at a specific node?
+if($specNodes) {
+    my @nodes;
+    if(index($specNodes, '[') != -1) {
+	@nodes = `scontrol show hostname $specNodes`;
+    } elsif (index($specNodes, ',') != -1) {
+	@nodes = split($specNodes, ',');
+    } else {
+	@nodes = ($specNodes);
+    }
+    my $where = "WHERE ";
+    foreach $a (@nodes) {
+	chomp($a);
+	$where = $where . "NODE = '" . $a . "' OR ";
+    }
+    chop($where);
+    chop($where);
+    chop($where);
+    $stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
+	       $where
+	       GROUP BY NODE
+	       ORDER BY NODE ASC, TIMEREMAIN DESC);
+} else {
+    $stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
+	       ORDER BY NODE ASC, TIMEREMAIN DESC);
+}
+if($debug) {
+    print "SQL Statement: $stmt\n";
+}
 my $sth = $dbh->prepare($stmt);
 $rv = $sth->execute() or die $DBI::errstr;
 if($rv<0) {
