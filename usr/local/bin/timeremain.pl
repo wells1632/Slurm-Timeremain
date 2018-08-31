@@ -39,6 +39,28 @@ if ($rv <0) {
     }
 }
 
+# First, we create entries in the table with zero times. This is so that we have a list of
+# nodes that are not being used as well
+my @sinfo = `sinfo | tail -n +2 | awk \'\{print \$6\}\'`;
+foreach $a (@sinfo) {
+    my @nodes;
+    # Check if this is a slurm grouping
+    if(index($a, '[') != -1) {
+	@nodes=`scontrol show hostname $a`;
+    } elsif (index($a, ',') != -1) {
+	@nodes=split($a, ',');
+    } else {
+	@nodes=($a);
+    }
+    foreach $b (@nodes) {
+	chomp($b);
+	$stmt = qq(INSERT INTO TIMEREMAIN (NODE, TIMEREMAIN)
+		   VALUES ('$b', '0'));
+	$rv = $dbh->do($stmt) or die $DBI::errstr;
+    }
+    
+}
+
 # Grab squeue information
 my @squeue = `squeue -o "%L %128N" | tail -n +2`;
 
