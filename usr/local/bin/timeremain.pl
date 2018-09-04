@@ -13,19 +13,38 @@ use strict;
 use POSIX qw(strftime);
 use Getopt::Std;
 
+# Flag variables
 my $debug=0;
+my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
 
 # Get Commandline Options
-getopts('dh');
-our($opt_h, $opt_d);
+getopts('dhnr');
+our($opt_h, $opt_d, $opt_n, $opt_r);
 if($opt_h) {
-    print "Usage: $0 [options]\n";
+    print "Displays time remaining for jobs on nodes\n";
+    print "\n";
+    print "Usage: $0 [options] [nodelist]\n";
     print "Options: \n";
     print "-d: Debug mode\n";
+    print "-h: This help\n";
+    print "-n: Order results by node (by time is default)\n";
+    print "-r: Reverse order of results\n";
+    print "\n";
+    print "Nodelist: Nodes can be comma separated or described in SLURM notation, i.e. c1a-s[3-7]\n";
     exit 0;
 }
 if($opt_d) {
     $debug=1;
+}
+if ($opt_r) {
+    $order="ORDER BY TIMEREMAIN ASC, NODE ASC";
+}
+if ($opt_n) {
+    if ($opt_r) {
+	$order="ORDER BY NODE DESC, TIMEREMAIN DESC";
+    } else {
+	$order="ORDER BY NODE ASC, TIMEREMAIN DESC";
+    }
 }
 
 # Check for specific nodes instead
@@ -49,7 +68,7 @@ if ($debug){
 my $stmt = qq(CREATE TABLE TIMEREMAIN
   (
     NODE          TEXT NOT NULL,
-    TIMEREMAIN    TEXT NOT NULL););
+    TIMEREMAIN    INT  NOT NULL););
 my $rv = $dbh->do($stmt);
 if ($rv <0) {
     print $DBI::errstr;
@@ -61,7 +80,7 @@ if ($rv <0) {
 
 # First, we create entries in the table with zero times. This is so that we have a list of
 # nodes that are not being used as well
-my @sinfo = `sinfo | tail -n +2 | awk \'\{print \$6\}\'`;
+my @sinfo = `sinfo --state=DRAINED,DOWN,IDLE,MAINT| tail -n +2 | awk \'\{print \$6\}\'`;
 foreach $a (@sinfo) {
     my @nodes;
     # Check if this is a slurm grouping
@@ -161,10 +180,11 @@ if($specNodes) {
     $stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
 	       $where
 	       GROUP BY NODE
-	       ORDER BY NODE ASC, TIMEREMAIN DESC);
+	       $order);
 } else {
     $stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
-	       ORDER BY NODE ASC, TIMEREMAIN DESC);
+	       GROUP BY NODE
+	       $order);
 }
 if($debug) {
     print "SQL Statement: $stmt\n";
@@ -176,8 +196,16 @@ if($rv<0) {
 }
 
 while (my @row = $sth->fetchrow_array()) {
+    # Skip this line if the node name is two characters or less
+    if (length(@row[0]) <= 2 ) {
+	next;
+    }
     my $convtime = convert_seconds_to_hhmmss(@row[1]);
-    printf "%15s %s\n", @row[0], $convtime;
+    if($debug) {
+	printf "%15s - %s : %s - %s\n", @row[0], length(@row[0]), $convtime, @row[1];
+    } else {
+	printf "%15s %s\n", @row[0], $convtime;
+    }	
 }
 
 # Close out database and remove it
