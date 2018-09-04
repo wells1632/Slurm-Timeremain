@@ -18,8 +18,8 @@ my $debug=0;
 my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
 
 # Get Commandline Options
-getopts('dhnr');
-our($opt_h, $opt_d, $opt_n, $opt_r);
+getopts('dhmnr');
+our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m);
 if($opt_h) {
     print "Displays time remaining for jobs on nodes\n";
     print "\n";
@@ -27,6 +27,7 @@ if($opt_h) {
     print "Options: \n";
     print "-d: Debug mode\n";
     print "-h: This help\n";
+    print "-m: Omit nodes that are reserved or in maintenance\n";
     print "-n: Order results by node (by time is default)\n";
     print "-r: Reverse order of results\n";
     print "\n";
@@ -157,6 +158,34 @@ if($debug) {
 	print "Count = " . $row[0] . "\n";
     }
 }
+
+# Remove entries that are under maintenance or reserved if requested
+if($opt_m) {
+    @sinfo = `sinfo --state=RESERVED,MAINT| tail -n +2 | awk \'\{print \$6\}\'`;
+    my $counter;
+    foreach $a (@sinfo) {
+	my @nodes;
+	# Check if this is a slurm grouping
+	if(index($a, '[') != -1) {
+	    @nodes=`scontrol show hostname $a`;
+	} elsif (index($a, ',') != -1) {
+	    @nodes=split($a, ',');
+	} else {
+	    @nodes=($a);
+	}
+	foreach $b (@nodes) {
+	    chomp($b);
+	    $stmt = qq(DELETE FROM TIMEREMAIN
+		       WHERE NODE = '$b');
+	    $rv = $dbh->do($stmt) or die $DBI::errstr;
+	    $counter++;
+	}
+    }
+    if($debug) {
+	print "Nodes removed from REMOVED and MAINT state: $counter\n";
+    }
+}
+    
 
 # Give a result
 # Are we looking at a specific node?
