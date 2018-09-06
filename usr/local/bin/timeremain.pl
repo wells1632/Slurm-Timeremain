@@ -81,14 +81,14 @@ if ($rv <0) {
 
 # First, we create entries in the table with zero times. This is so that we have a list of
 # nodes that are not being used as well
-my @sinfo = `sinfo --state=DRAINED,DOWN,IDLE,MAINT| tail -n +2 | awk \'\{print \$6\}\'`;
+my @sinfo = `sinfo --state=DRAINED,DOWN,IDLE,MAINT| tail -n +2 | grep -v \'n\/a\' | awk \'\{print \$6\}\'`;
 foreach $a (@sinfo) {
     my @nodes;
     # Check if this is a slurm grouping
     if(index($a, '[') != -1) {
 	@nodes=`scontrol show hostname $a`;
     } elsif (index($a, ',') != -1) {
-	@nodes=split($a, ',');
+	@nodes=split(/,/, $a);
     } else {
 	@nodes=($a);
     }
@@ -132,7 +132,7 @@ foreach $a (@squeue) {
 	    if(index(@line[1], '[') != -1) {
 		@nodes = `scontrol show hostname @line[1]`;
 	    } elsif ( index(@line[1], ',') != -1) {
-		@nodes = split(@line[1], ',');
+		@nodes = split(/,/, @line[1]);
 	    } else {
 		@nodes = (@line[1]);
 	    }
@@ -169,7 +169,7 @@ if($opt_m) {
 	if(index($a, '[') != -1) {
 	    @nodes=`scontrol show hostname $a`;
 	} elsif (index($a, ',') != -1) {
-	    @nodes=split($a, ',');
+	    @nodes=split(/,/, $a);
 	} else {
 	    @nodes=($a);
 	}
