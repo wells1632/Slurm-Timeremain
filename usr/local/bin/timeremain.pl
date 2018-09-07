@@ -68,7 +68,7 @@ if ($debug){
 # Create table
 my $stmt = qq(CREATE TABLE TIMEREMAIN
   (
-    NODE          TEXT NOT NULL,
+    NODE          TEXT PRIMARY KEY,
     TIMEREMAIN    INT  NOT NULL););
 my $rv = $dbh->do($stmt);
 if ($rv <0) {
@@ -81,24 +81,13 @@ if ($rv <0) {
 
 # First, we create entries in the table with zero times. This is so that we have a list of
 # nodes that are not being used as well
-my @sinfo = `sinfo --state=DRAINED,DOWN,IDLE,MAINT| tail -n +2 | grep -v \'n\/a\' | awk \'\{print \$6\}\'`;
+my @sinfo = `sinfo -Nehl | awk \'\{print \$1\}\'`;
 foreach $a (@sinfo) {
     my @nodes;
-    # Check if this is a slurm grouping
-    if(index($a, '[') != -1) {
-	@nodes=`scontrol show hostname $a`;
-    } elsif (index($a, ',') != -1) {
-	@nodes=split(/,/, $a);
-    } else {
-	@nodes=($a);
-    }
-    foreach $b (@nodes) {
-	chomp($b);
-	$stmt = qq(INSERT INTO TIMEREMAIN (NODE, TIMEREMAIN)
-		   VALUES ('$b', '0'));
-	$rv = $dbh->do($stmt) or die $DBI::errstr;
-    }
-    
+    chomp($a);
+    $stmt = qq(INSERT INTO TIMEREMAIN (NODE, TIMEREMAIN)
+	       VALUES ('$a', '0'));
+    $rv = $dbh->do($stmt) or die $DBI::errstr;
 }
 
 # Grab squeue information
@@ -138,8 +127,11 @@ foreach $a (@squeue) {
 	    }
 	    foreach $b (@nodes) {
 		chomp($b);
-		$stmt = qq(INSERT INTO TIMEREMAIN (NODE, TIMEREMAIN)
-			      VALUES ('$b', '$tottime'));
+#		$stmt = qq(INSERT INTO TIMEREMAIN (NODE, TIMEREMAIN)
+#			      VALUES ('$b', '$tottime'));
+		$stmt = qq(UPDATE TIMEREMAIN 
+			   SET TIMEREMAIN = '$tottime'
+			   WHERE NODE = '$b');
 		$rv = $dbh->do($stmt) or die $DBI::errstr;
 	    }
 	}
