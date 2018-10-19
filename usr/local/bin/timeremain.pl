@@ -18,8 +18,8 @@ my $debug=0;
 my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
 
 # Get Commandline Options
-getopts('dhmnr');
-our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m);
+getopts('dhmnrw');
+our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m, $opt_w);
 if($opt_h) {
     print "Displays time remaining for jobs on nodes\n";
     print "\n";
@@ -30,6 +30,7 @@ if($opt_h) {
     print "-m: Omit nodes that are reserved or in maintenance\n";
     print "-n: Order results by node (by time is default)\n";
     print "-r: Reverse order of results\n";
+    print "-w: Print job ID's associated with nodes\n";
     print "\n";
     print "Nodelist: Nodes can be comma separated or described in SLURM notation, i.e. c1a-s[3-7]\n";
     exit 0;
@@ -216,16 +217,31 @@ if($rv<0) {
     print $DBI::errstr;
 }
 
+if($opt_w) {
+    printf "%15s %-15s %-15s\n", "Node", "Time Remaining", "Job ID's";
+} else {
+    printf "%15s %-15s %-15s\n", "Node", "Time Remaining";
+}    
 while (my @row = $sth->fetchrow_array()) {
     # Skip this line if the node name is two characters or less
     if (length(@row[0]) <= 2 ) {
 	next;
     }
     my $convtime = convert_seconds_to_hhmmss(@row[1]);
+    my $jobID;
+    if($opt_w) {
+	$jobID=`squeue -w @row[0] | tail -n +2 | awk '{print \$1}' | tr "\\n" ","`;
+	chop $jobID;
+    }
     if($debug) {
-	printf "%15s - %s : %s - %s\n", @row[0], length(@row[0]), $convtime, @row[1];
+	print "Job ID's Generated: " . $jobID . "\n";
+	printf "%15s - %s : %s - %s :: %s\n", @row[0], length(@row[0]), $convtime, @row[1], $jobID;
     } else {
-	printf "%15s %s\n", @row[0], $convtime;
+	if($opt_w) {
+	    printf "%15s %-15s %s\n", @row[0], $convtime, $jobID;
+	} else {
+	    printf "%15s %-15s\n", @row[0], $convtime;
+	}
     }	
 }
 
