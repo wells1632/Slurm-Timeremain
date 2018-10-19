@@ -57,6 +57,16 @@ if($ARGV[0]) {
     $specNodes = $ARGV[0];
 }
 
+# A partition list is requested
+if($opt_p) {
+    $specNodes = `sinfo -p $opt_p | tail -n +2 | awk '{print \$6}' | tr "\\n" ","`;
+}
+
+# A reservation list is requested
+if($opt_R) {
+    $specNodes = `sinfo -T | grep $opt_R | awk '{print \$6}' | tr "\\n" ","`;
+}
+
 # Setup temporary database
 my $driver = "SQLite";
 my $dsn = "DBI:$driver:dbname=:memory:";
