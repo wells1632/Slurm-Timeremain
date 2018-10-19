@@ -18,8 +18,8 @@ my $debug=0;
 my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
 
 # Get Commandline Options
-getopts('dhmnrw');
-our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m, $opt_w);
+getopts('dhmnrwR:p:');
+our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m, $opt_w, $opt_R, $opt_p);
 if($opt_h) {
     print "Displays time remaining for jobs on nodes\n";
     print "\n";
@@ -31,6 +31,8 @@ if($opt_h) {
     print "-n: Order results by node (by time is default)\n";
     print "-r: Reverse order of results\n";
     print "-w: Print job ID's associated with nodes\n";
+    print "-R: Use reservation for nodelist\n";
+    print "-p: Use partition for nodelist\n";
     print "\n";
     print "Nodelist: Nodes can be comma separated or described in SLURM notation, i.e. c1a-s[3-7]\n";
     exit 0;
