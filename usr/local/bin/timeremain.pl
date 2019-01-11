@@ -123,11 +123,17 @@ foreach $a (@squeue) {
 		$tottime += $h*3600;
 		$tottime += $m*60;
 		$tottime += $s;
+		if($debug) {
+		    print "Found time that is longer than a day on @line[1], Time = " . convert_seconds_to_hhmmss($tottime) . "\n";
+		}
 	    } else {
 		my ($h,$m,$s)=split(/:/,@line[0]);
 		$tottime += $h*3600;
 		$tottime += $m*60;
 		$tottime += $s;
+	    }
+	    if($debug) {
+		print "Current time on @line[1] is " . convert_seconds_to_hhmmss($tottime) . "\n";
 	    }
 	    # Now split out the values of the nodes associated with this time and insert into the database
 	    my @nodes;
@@ -142,10 +148,21 @@ foreach $a (@squeue) {
 		chomp($b);
 #		$stmt = qq(INSERT INTO TIMEREMAIN (NODE, TIMEREMAIN)
 #			      VALUES ('$b', '$tottime'));
-		$stmt = qq(UPDATE TIMEREMAIN 
-			   SET TIMEREMAIN = '$tottime'
-			   WHERE NODE = '$b');
-		$rv = $dbh->do($stmt) or die $DBI::errstr;
+		$stmt = qq(SELECT TIMEREMAIN
+                                  FROM TIMEREMAIN
+                                  WHERE NODE = '$b');
+		my $sth = $dbh->prepare($stmt);
+		my $rv = $sth->execute() or die $DBI::errstr;
+		my @checkVal = $sth->fetchrow_array();
+		if ($debug) {
+		    print "Current db TIMEREMAIN value: @checkVal[0] | Node: $b\n";
+		}
+		if (@checkVal[0]<$tottime) {
+		    $stmt = qq(UPDATE TIMEREMAIN 
+			       SET TIMEREMAIN = '$tottime'
+			       WHERE NODE = '$b');
+		    $rv = $dbh->do($stmt) or die $DBI::errstr;
+		}
 	    }
 	}
     }
@@ -211,12 +228,12 @@ if($specNodes) {
     chop($where);
     chop($where);
     chop($where);
-    $stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
+    $stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
 	       $where
 	       GROUP BY NODE
 	       $order);
 } else {
-    $stmt = qq(SELECT DISTINCT NODE, TIMEREMAIN FROM TIMEREMAIN 
+    $stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
 	       GROUP BY NODE
 	       $order);
 }
