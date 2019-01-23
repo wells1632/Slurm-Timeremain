@@ -104,7 +104,7 @@ foreach $a (@sinfo) {
 }
 
 # Grab squeue information
-my @squeue = `squeue -o "%L %128N" | tail -n +2`;
+my @squeue = `squeue -o "%L %N" | tail -n +2`;
 
 # Parse through squeue data
 foreach $a (@squeue) {
@@ -279,9 +279,18 @@ $dbh->disconnect();
 
 # Subroutines
 sub convert_seconds_to_hhmmss {
-  my $hourz=int($_[0]/3600);
-  my $leftover=$_[0] % 3600;
-  my $minz=int($leftover/60);
-  my $secz=int($leftover % 60);
-  return sprintf ("%d:%02d:%02d", $hourz,$minz,$secz)
+    my $hourz = 0;
+    my $leftover=0;
+    if($_[0] > 3600) {
+	$hourz=int($_[0]/3600);
+	$leftover=$_[0] % 3600;
+    } else {
+	$leftover=$_[0];
+    }
+    my $minz=int($leftover/60);
+    my $secz=int($leftover % 60);
+    if($debug) {
+	print "DEBUG: total seconds: $_[0] | hourz : $hourz | minz : $minz | secz : $secz\n";
+    }
+    return sprintf ("%d:%02d:%02d", $hourz,$minz,$secz)
 }
