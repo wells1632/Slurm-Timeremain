@@ -18,8 +18,8 @@ my $debug=0;
 my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
 
 # Get Commandline Options
-getopts('dhmnrwR:p:');
-our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m, $opt_w, $opt_R, $opt_p);
+getopts('dhmnrwR:p:D:');
+our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m, $opt_w, $opt_R, $opt_p, $opt_D);
 if($opt_h) {
     print "Displays time remaining for jobs on nodes\n";
     print "\n";
@@ -33,6 +33,7 @@ if($opt_h) {
     print "-w: Print job ID's associated with nodes\n";
     print "-R: Use reservation for nodelist\n";
     print "-p: Use partition for nodelist\n";
+    print "-D: Use DSH group\n";
     print "\n";
     print "Nodelist: Nodes can be comma separated or described in SLURM notation, i.e. c1a-s[3-7]\n";
     exit 0;
@@ -66,6 +67,18 @@ if($opt_p) {
 if($opt_R) {
     $specNodes = `sinfo -T | grep $opt_R | awk '{print \$6}' | tr "\\n" ","`;
 }
+
+# A DSH group is requested
+if($opt_D) {
+    # Check to ensure that DSH group exists
+    if (-e "/etc/dsh/group/$opt_D") {
+	$specNodes = `cat /etc/dsh/group/$opt_D | tr '\\n' ','`;
+	chop($specNodes);
+    } else {
+	die "The DSH group $opt_D does not exist.";
+    }
+}
+
 
 # Setup temporary database
 my $driver = "SQLite";
@@ -211,14 +224,26 @@ if($opt_m) {
 
 # Give a result
 # Are we looking at a specific node?
+if($debug) {
+    print "SpecNodes value: $specNodes\n";
+}
 if($specNodes) {
     my @nodes;
     if(index($specNodes, '[') != -1) {
 	@nodes = `scontrol show hostname $specNodes`;
+	if($debug) {
+	    print "Brackets\n";
+	}
     } elsif (index($specNodes, ',') != -1) {
-	@nodes = split($specNodes, ',');
+	@nodes = split(/,/, $specNodes);
+	if($debug) {
+	    print "Commas: '@nodes'\n";
+	}
     } else {
 	@nodes = ($specNodes);
+	if($debug) {
+	    print "Clean\n";
+	}
     }
     my $where = "WHERE ";
     foreach $a (@nodes) {
