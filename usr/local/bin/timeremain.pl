@@ -143,10 +143,22 @@ foreach $a (@squeue) {
 		    print "Found time that is longer than a day on @line[1], Time = " . convert_seconds_to_hhmmss($tottime) . "\n";
 		}
 	    } else {
-		my ($h,$m,$s)=split(/:/,@line[0]);
-		$tottime += $h*3600;
-		$tottime += $m*60;
-		$tottime += $s;
+                # Time reported by squeue chops off leading zeros in times, so if the time is under an hour it will only display
+                # mm:ss, and if under a minute it will only display seconds. Have to try each case.
+                my $char_count = () = @line[0] =~ /:/g;
+                my ($h,$m,$s)=split(/:/,@line[0]);
+                if($char_count == 2) {
+                    $tottime += $h*3600;
+                    $tottime += $m*60;
+                    $tottime += $s;
+                }
+                elsif($char_count >= 1) {
+                    $tottime += $h*60;
+                    $tottime += $m;
+                }
+                else {
+                    $tottime +=$h;
+                }
 	    }
 	    if($debug) {
 		print "Current time on @line[1] is " . convert_seconds_to_hhmmss($tottime) . "\n";
