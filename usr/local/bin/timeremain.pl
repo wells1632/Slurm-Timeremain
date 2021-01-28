@@ -110,7 +110,7 @@ if ($rv <0) {
 
 # First, we create entries in the table with zero times. This is so that we have a list of
 # nodes that are not being used as well
-my @sinfo = `sinfo -Nehl | awk \'\{print \$1\}\'`;
+my @sinfo = `sinfo -Nehl | awk \'\{print \$1\}\' | sort | uniq`;
 foreach $a (@sinfo) {
     my @nodes;
     chomp($a);
