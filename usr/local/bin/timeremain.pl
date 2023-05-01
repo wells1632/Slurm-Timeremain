@@ -17,6 +17,9 @@ use Getopt::Std;
 my $debug=0;
 my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
 
+# Location of DSH group files
+my $DSH="/etc/dsh/group/"
+
 # Get Commandline Options
 getopts('dhmnrwR:p:D:');
 our($opt_h, $opt_d, $opt_n, $opt_r, $opt_m, $opt_w, $opt_R, $opt_p, $opt_D);
@@ -71,8 +74,8 @@ if($opt_R) {
 # A DSH group is requested
 if($opt_D) {
     # Check to ensure that DSH group exists
-    if (-e "/etc/dsh/group/$opt_D") {
-	$specNodes = `cat /etc/dsh/group/$opt_D | tr '\\n' ','`;
+    if (-e "${DSH}$opt_D") {
+	$specNodes = `cat ${DSH}$opt_D | tr '\\n' ','`;
 	chop($specNodes);
     } else {
 	die "The DSH group $opt_D does not exist.";
