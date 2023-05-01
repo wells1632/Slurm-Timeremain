@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Script to show how much time is remaining (max) for a given node
-# Version 1.0
+# Version 1.1
 
 # Handy commands...
 # squeue -O timeleft,nodelist -w c21a-s1
@@ -16,9 +16,6 @@ use Getopt::Std;
 # Flag variables
 my $debug=0;
 my $order="ORDER BY TIMEREMAIN DESC, NODE ASC";
-
-# Location of DSH group files
-my $DSH="/etc/dsh/group/"
 
 # Get Commandline Options
 getopts('dhmnrwR:p:D:');
@@ -74,8 +71,8 @@ if($opt_R) {
 # A DSH group is requested
 if($opt_D) {
     # Check to ensure that DSH group exists
-    if (-e "${DSH}${opt_D}") {
-	$specNodes = `cat ${DSH}${opt_D} | tr '\\n' ','`;
+    if (-e "/etc/dsh/group/$opt_D") {
+	$specNodes = `cat /etc/dsh/group/$opt_D | tr '\\n' ','`;
 	chop($specNodes);
     } else {
 	die "The DSH group $opt_D does not exist.";
@@ -110,7 +107,7 @@ if ($rv <0) {
 
 # First, we create entries in the table with zero times. This is so that we have a list of
 # nodes that are not being used as well
-my @sinfo = `sinfo -Nehl | awk \'\{print \$1\}\' | sort | uniq`;
+my @sinfo = `sinfo -Nehl | awk \'\{print \$1\}\' | sort| uniq`;
 foreach $a (@sinfo) {
     my @nodes;
     chomp($a);
@@ -143,22 +140,22 @@ foreach $a (@squeue) {
 		    print "Found time that is longer than a day on @line[1], Time = " . convert_seconds_to_hhmmss($tottime) . "\n";
 		}
 	    } else {
-                # Time reported by squeue chops off leading zeros in times, so if the time is under an hour it will only display
-                # mm:ss, and if under a minute it will only display seconds. Have to try each case.
-                my $char_count = () = @line[0] =~ /:/g;
-                my ($h,$m,$s)=split(/:/,@line[0]);
-                if($char_count == 2) {
-                    $tottime += $h*3600;
-                    $tottime += $m*60;
-                    $tottime += $s;
-                }
-                elsif($char_count >= 1) {
-                    $tottime += $h*60;
-                    $tottime += $m;
-                }
-                else {
-                    $tottime +=$h;
-                }
+		# Time reported by squeue chops off leading zeros in times, so if the time is under an hour it will only display
+		# mm:ss, and if under a minute it will only display seconds. Have to try each case. 
+		my $char_count = () = @line[0] =~ /:/g;
+		my ($h,$m,$s)=split(/:/,@line[0]);
+		if($char_count == 2) {
+		    $tottime += $h*3600;
+		    $tottime += $m*60;
+		    $tottime += $s;
+		}
+		elsif($char_count >= 1) {
+		    $tottime += $h*60;
+		    $tottime += $m;
+		}
+		else {
+		    $tottime +=$h;
+		}
 	    }
 	    if($debug) {
 		print "Current time on @line[1] is " . convert_seconds_to_hhmmss($tottime) . "\n";
@@ -242,6 +239,7 @@ if($opt_m) {
 if($debug) {
     print "SpecNodes value: $specNodes\n";
 }
+$rv="";
 if($specNodes) {
     my @nodes;
     if(index($specNodes, '[') != -1) {
@@ -261,17 +259,62 @@ if($specNodes) {
 	}
     }
     my $where = "WHERE ";
-    foreach $a (@nodes) {
-	chomp($a);
-	$where = $where . "NODE = '" . $a . "' OR ";
-    }
-    chop($where);
-    chop($where);
-    chop($where);
-    $stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
+
+# If the specified nodes value has more than about 50 nodes in the list,
+# the list will be too long and SQLlite will explode with a maximum depth
+# error. So if the number of values in @nodes is more than, say, 30, we
+# will need to split the query up into more than one query at a time.
+
+# On further reflection, you *could* simplify this by just making a separate
+# SQL query against each node in the list instead of doing a long WHERE
+# clause. It is horrible and abuses the daylights out of SQLlite, but it
+# could be done that way.
+    
+    my $node_count = @nodes;
+    if($node_count <= 30) {
+	foreach $a (@nodes) {
+	    chomp($a);
+	    $where = $where . "NODE = '" . $a . "' OR ";
+	}
+	chop($where);
+	chop($where);
+	chop($where);
+	$stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
 	       $where
 	       GROUP BY NODE
-	       $order);
+		   $order);
+    } else {
+# More than 30 nodes in the list, so we break this up.
+	my $subnodes = int($node_count/30);  # How many groups of 30 are there?
+	for (my $i = 0; $i < $subnodes; $i++) {
+	    for (my $j = 0; $j < 30; $j++) {
+		$where = $where . "NODE = '" . $nodes[$j + (30*$i)] . "' OR ";
+	    }
+	    chop($where);
+	    chop($where);
+	    chop($where);
+	    $stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
+		       $where
+		       GROUP BY NODE
+		       $order);
+	    if($debug) {
+		print "SQL Statement: $stmt\n";
+	    }
+	    my $sth = $dbh->prepare($stmt);
+	    $rv = $rv . $sth->execute() or die $DBI::errstr;
+	    $where = "WHERE ";
+	}
+	for (my $i = 0; $i < ($node_count % 30); $i++) {
+	    $where = $where . "NODE = '" . $nodes[$i + (30*(int($node_count/30)))] . "' OR ";
+	}
+	chop($where);
+	chop($where);
+	chop($where);
+	$stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
+		   $where
+		   GROUP BY NODE
+		   $order);
+    }
 } else {
     $stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
 	       GROUP BY NODE
@@ -281,9 +324,12 @@ if($debug) {
     print "SQL Statement: $stmt\n";
 }
 my $sth = $dbh->prepare($stmt);
-$rv = $sth->execute() or die $DBI::errstr;
+$rv = $rv . $sth->execute() or die $DBI::errstr;
 if($rv<0) {
     print $DBI::errstr;
+}
+if($debug) {
+    print "SQL Output: $rv\n";
 }
 
 if($opt_w) {
