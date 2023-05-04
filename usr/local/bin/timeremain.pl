@@ -283,6 +283,22 @@ if($specNodes) {
     # Now that we have the list of nodes in an array, we can perform individual queries against the
     # database for each node. However, this will just give us a list of the nodes in the order they
     # were listed on the commandline. The normal output is sort by time, largest time listed first.
+    #
+    # More SQLite silliness... Don't want to bother with sorting a multidimensional array, so
+    # instead will create a secondary table in SQLite and pull my results from there.
+    my $stmt = qq(CREATE TABLE OUTPUT
+		  (
+                   NODE          TEXT PRIMARY KEY,
+                   TIMEREMAIN    INT  NOT NULL,
+                   JOBID         TEXT););
+    my $rv = $dbh->do($stmt);
+    if ($rv <0) {
+	print $DBI::errstr;
+    } else {
+	if ($debug) {
+	    print "Table created successfully\n";
+	}
+    }
     foreach $a (@nodes) {
 	chomp($a);
 	$stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN) FROM TIMEREMAIN 
@@ -302,7 +318,6 @@ if($specNodes) {
 	    if (length(@row[0]) <= 2 ) {
 		next;
 	    }
-	    my $convtime = convert_seconds_to_hhmmss(@row[1]);
 	    my $jobID;
 	    if($opt_w) {
 		$jobID=`squeue -w @row[0] | tail -n +2 | awk '{print \$1}' | tr "\\n" ","`;
@@ -310,14 +325,29 @@ if($specNodes) {
 	    }
 	    if($debug) {
 		print "Job ID's Generated: " . $jobID . "\n";
-		printf "%15s - %s : %s - %s :: %s\n", @row[0], length(@row[0]), $convtime, @row[1], $jobID;
-	    } else {
-		if($opt_w) {
-		    printf "%15s %-15s %s\n", @row[0], $convtime, $jobID;
-		} else {
-		    printf "%15s %-15s\n", @row[0], $convtime;
-		}
-	    }
+		printf "%15s - %s : %s - %s :: %s\n", @row[0], length(@row[0]), @row[1], $jobID;
+	    } 
+	    $stmt = qq(INSERT INTO OUTPUT (NODE, TIMEREMAIN, JOBID)
+		       VALUES ('@row[0]', '$row[1]', '$jobID'));
+	    $rv = $dbh->do($stmt) or die $DBI::errstr;
+	}
+    }
+    # At this point, all of the data we need is now in the OUTPUT table. We just need to query it and
+    # print out the information.
+    $stmt = qq(SELECT DISTINCT NODE, MAX(TIMEREMAIN), JOBID FROM OUTPUT
+	       GROUP BY NODE
+	       $order);
+    if($debug) {
+	print "SQL: " . $stmt;
+    }
+    my $sth = $dbh->prepare($stmt);
+    $sth->execute();
+    while (my @row = $sth->fetchrow_array()) {
+	my $convtime = convert_seconds_to_hhmmss(@row[1]);
+	if($opt_w) {
+	    printf "%15s %-15s %s\n", @row[0], $convtime, @row[2];
+	} else {
+	    printf "%15s %-15s\n", @row[0], $convtime;
 	}
     }
 } else {
