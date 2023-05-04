@@ -291,7 +291,7 @@ if($specNodes) {
     # instead will create a secondary table in SQLite and pull my results from there.
     my $stmt = qq(CREATE TABLE OUTPUT
 		  (
-                   NODE          TEXT PRIMARY KEY,
+                   NODE          TEXT,
                    TIMEREMAIN    INT  NOT NULL,
                    JOBID         TEXT););
     my $rv = $dbh->do($stmt);
