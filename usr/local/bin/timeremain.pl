@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 # Script to show how much time is remaining (max) for a given node
-# Version 1.0
+# Version 1.1
 
 # Handy commands...
 # squeue -O timeleft,nodelist -w c21a-s1
@@ -69,6 +69,9 @@ if($opt_p) {
 # A reservation list is requested
 if($opt_R) {
     $specNodes = `sinfo -T | grep $opt_R | awk '{print \$6}' | tr "\\n" ","`;
+    if($specNodes eq "") {
+	die "Reservation $opt_R not found\n";
+    }
 }
 
 # A DSH group is requested
